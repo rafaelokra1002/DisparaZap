@@ -1,0 +1,73 @@
+# docker-compose para deploy do DisparaZap na Coolify (ou qualquer host Docker).
+#
+# Na Coolify: crie um recurso "Docker Compose", aponte pra este repo e ajuste
+# as variáveis de ambiente na aba Environment. Os domínios são atribuídos pela
+# Coolify (defina FRONTEND_URL / BACKEND_URL / NEXT_PUBLIC_API_URL com as URLs
+# públicas que ela gerar).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-disparazap}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-disparazap}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-disparazap}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-disparazap}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-disparazap}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?defina um segredo forte}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      # URLs públicas (ajuste para os domínios da Coolify)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:3001}
+      # Chromium do sistema (já instalado na imagem)
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      # --- Pagamentos (opcionais) ---
+      MISTIC_PAY_CLIENT_ID: ${MISTIC_PAY_CLIENT_ID:-}
+      MISTIC_PAY_CLIENT_SECRET: ${MISTIC_PAY_CLIENT_SECRET:-}
+      MISTIC_PAY_WEBHOOK_URL: ${MISTIC_PAY_WEBHOOK_URL:-}
+      PIX_KEY: ${PIX_KEY:-}
+      PIX_NAME: ${PIX_NAME:-}
+      PIX_CITY: ${PIX_CITY:-}
+    volumes:
+      - wa_tokens:/app/tokens
+      - wa_uploads:/app/uploads
+      - wa_cache:/app/.wwebjs_cache
+    expose:
+      - "3001"
+    # SHM maior evita crashes do Chromium sob carga.
+    shm_size: "1gb"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Precisa ser a URL PÚBLICA do backend (embutida no build).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "3000"
+
+volumes:
+  pgdata:
+  wa_tokens:
+  wa_uploads:
+  wa_cache:
