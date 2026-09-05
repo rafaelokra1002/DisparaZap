@@ -1,9 +1,8 @@
 # docker-compose para deploy do DisparaZap na Coolify.
 #
-# As URLs publicas estao fixadas aqui (nao sao segredo). Na Coolify voce so
-# precisa definir na aba Environment Variables:
-#   - POSTGRES_PASSWORD  (use APENAS letras e numeros, sem simbolos como # @ : / ?)
-#   - JWT_SECRET         (string longa e aleatoria)
+# As URLs publicas estao fixadas aqui. Na Coolify e preciso definir:
+#   - POSTGRES_PASSWORD  (APENAS letras e numeros, sem # @ : / ?)
+#   - JWT_SECRET         (string longa e aleatoria) -- ja configurada
 #   - ADMIN_EMAIL        (opcional; e-mail que vira admin)
 #
 # Se um dia mudar de dominio, ajuste FRONTEND_URL, BACKEND_URL e
