@@ -1,22 +1,26 @@
-# docker-compose para deploy do DisparaZap na Coolify (ou qualquer host Docker).
+# docker-compose para deploy do DisparaZap na Coolify.
 #
-# Na Coolify: crie um recurso "Docker Compose", aponte pra este repo e ajuste
-# as variáveis de ambiente na aba Environment. Os domínios são atribuídos pela
-# Coolify (defina FRONTEND_URL / BACKEND_URL / NEXT_PUBLIC_API_URL com as URLs
-# públicas que ela gerar).
+# As URLs publicas estao fixadas aqui (nao sao segredo). Na Coolify voce so
+# precisa definir na aba Environment Variables:
+#   - POSTGRES_PASSWORD  (use APENAS letras e numeros, sem simbolos como # @ : / ?)
+#   - JWT_SECRET         (string longa e aleatoria)
+#   - ADMIN_EMAIL        (opcional; e-mail que vira admin)
+#
+# Se um dia mudar de dominio, ajuste FRONTEND_URL, BACKEND_URL e
+# NEXT_PUBLIC_API_URL abaixo e faca redeploy.
 
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-disparazap}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: ${POSTGRES_DB:-disparazap}
+      POSTGRES_USER: disparazap
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: disparazap
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-disparazap}"]
+      test: ["CMD-SHELL", "pg_isready -U disparazap"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,13 +34,12 @@ services:
         condition: service_healthy
     environment:
       PORT: 3001
-      DATABASE_URL: postgresql://${POSTGRES_USER:-disparazap}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-disparazap}?schema=public
-      JWT_SECRET: ${JWT_SECRET:?defina um segredo forte}
+      DATABASE_URL: postgresql://disparazap:${POSTGRES_PASSWORD}@db:5432/disparazap?schema=public
+      JWT_SECRET: ${JWT_SECRET}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-      # URLs públicas (ajuste para os domínios da Coolify)
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      BACKEND_URL: ${BACKEND_URL:-http://localhost:3001}
-      # Chromium do sistema (já instalado na imagem)
+      FRONTEND_URL: https://disparazap.online
+      BACKEND_URL: https://api.disparazap.online
+      # Chromium do sistema (ja instalado na imagem)
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       # --- Pagamentos (opcionais) ---
       MISTIC_PAY_CLIENT_ID: ${MISTIC_PAY_CLIENT_ID:-}
@@ -58,8 +61,8 @@ services:
     build:
       context: ./frontend
       args:
-        # Precisa ser a URL PÚBLICA do backend (embutida no build).
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        # URL PUBLICA do backend, embutida no build do Next.js.
+        NEXT_PUBLIC_API_URL: https://api.disparazap.online
     restart: unless-stopped
     depends_on:
       - backend
