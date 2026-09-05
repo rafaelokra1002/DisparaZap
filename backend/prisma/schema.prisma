@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  password  String
+  dedicatedWhatsApp Boolean @default(false)
+  plan      String   @default("free")  // free, pro, pro_plus
+  planExpiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ads       Ad[]
+  dailySchedules DailySchedule[]
+  planTransactions PlanTransaction[]
+}
+
+model PlanTransaction {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  plan      String   // "pro", "pro_plus"
+  days      Int
+  amount    Float
+  status    String   @default("pending")  // pending, paid, cancelled
+  pixCode   String?
+  paidAt    DateTime?
+  misticPayTransactionId String?  // ID da transação na Mistic Pay
+  createdAt DateTime @default(now())
+}
+
+model Ad {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  
+  // Texto do anúncio
+  text      String?
+  textActive Boolean  @default(false)
+  
+  // Imagem + legenda
+  caption   String?
+  imageUrl  String?
+  captionActive Boolean @default(false)
+  
+  // Link de rastreamento gerado
+  trackingId String?  @unique
+  targetUrl  String?
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  sendLogs  SendLog[]
+  clicks    Click[]
+  dailySchedules DailySchedule[]
+}
+
+model SendLog {
+  id        String   @id @default(uuid())
+  adId      String
+  ad        Ad       @relation(fields: [adId], references: [id])
+  
+  groupName String
+  groupId   String
+  type      String   // "text" ou "image"
+  status    String   @default("pending") // "pending", "sent", "failed"
+  
+  sentAt    DateTime @default(now())
+}
+
+model Click {
+  id        String   @id @default(uuid())
+  adId      String
+  ad        Ad       @relation(fields: [adId], references: [id])
+  
+  ip        String?
+  userAgent String?
+  country   String?
+  device    String?
+  referer   String?
+  
+  clickedAt DateTime @default(now())
+}
+
+model DailySchedule {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  adId           String
+  ad             Ad       @relation(fields: [adId], references: [id])
+  
+  active         Boolean  @default(true)
+  scheduleMode   String   @default("single") // "single" ou "triple" (8h, 12h, 19h)
+  startHour      Int      @default(8)   // Hora de início (0-23), usado só no modo single
+  intervalMinutes Int     @default(120) // Intervalo entre envios
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+

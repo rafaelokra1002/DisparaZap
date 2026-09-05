@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"c:\\\\Users\\\\Administrator\\\\Desktop\\\\Divulgarzap\"; powershell -NoProfile -ExecutionPolicy Bypass -File \"deploy\\\\stop-divulgazap.ps1\"; Get-Process -Name \"chrome\" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host \"Servicos parados\")"
+    ]
+  }
+}

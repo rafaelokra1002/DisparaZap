@@ -1,0 +1,31 @@
+{
+  "name": "disparazap-backend",
+  "version": "1.0.0",
+  "description": "Backend do DisparaZap - Sistema de disparo WhatsApp",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon --ignore tokens/ --ignore uploads/ src/server.js",
+    "start": "node src/server.js",
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev --name init",
+    "prisma:studio": "npx prisma studio",
+    "setup": "npm install && npx prisma generate && npx prisma migrate dev --name init"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "axios": "^1.15.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.4",
+    "uuid": "^10.0.0",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "prisma": "^5.22.0"
+  }
+}
