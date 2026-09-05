@@ -35,9 +35,10 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true \
 
 WORKDIR /app
 
-# Instala dependências (inclui prisma). Cache-friendly.
+# Instala TODAS as dependências (o CLI do prisma está em devDependencies e é
+# necessário para `prisma generate` e `prisma migrate deploy`). Cache-friendly.
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 # Gera o Prisma Client (precisa do schema).
 COPY prisma ./prisma
