@@ -792,6 +792,27 @@ async function restoreDailySchedules() {
 }
 
 // Restaurar ao iniciar
+// Publica o anúncio no Status do WhatsApp da própria conta (status@broadcast).
+async function postAdStatus(userId, ad) {
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3002';
+
+  if (ad.captionActive && ad.imageUrl && ad.caption) {
+    let caption = variarTexto(ad.caption);
+    if (ad.trackingId) {
+      caption += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
+    }
+    await whatsappService.postStatus(userId, { imageUrl: ad.imageUrl, caption });
+  } else if (ad.textActive && ad.text) {
+    let text = variarTexto(ad.text);
+    if (ad.trackingId) {
+      text += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
+    }
+    await whatsappService.postStatus(userId, { text });
+  } else {
+    throw new Error('Anúncio sem conteúdo ativo para publicar no status');
+  }
+}
+
 restoreDailySchedules();
 
 console.log('🔄 Worker de envio pronto (com proteção anti-ban e agendamento diário)');
@@ -801,6 +822,7 @@ module.exports = {
   hasActiveManualQueue,
   startManualQueue,
   finishManualQueue,
+  postAdStatus,
   startSchedule,
   stopSchedule,
   getScheduleStatus,

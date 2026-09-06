@@ -778,6 +778,30 @@ const whatsappService = {
     }
   },
 
+  async postStatus(userId, { imageUrl, caption, text }) {
+    const STATUS_JID = 'status@broadcast';
+    let client = await this.ensureConnected(userId, undefined, 'publicação no status');
+
+    const doPost = async () => {
+      if (imageUrl) {
+        const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
+        return client.sendMessage(STATUS_JID, media, { caption: caption || '' });
+      }
+      return client.sendMessage(STATUS_JID, text || '');
+    };
+
+    try {
+      return await runWithRetry('Publicação no status', doPost);
+    } catch (error) {
+      if (!isRetryableWhatsAppError(error)) {
+        throw error;
+      }
+
+      client = await this.recoverSession(userId, undefined, `falha ao publicar no status: ${error.message}`);
+      return runWithRetry('Publicação no status após reconexão', doPost);
+    }
+  },
+
   async disconnect(userId, dedicatedWhatsApp) {
     const sessionId = await resolveSessionId(userId, dedicatedWhatsApp);
     const session = getSession(sessionId);

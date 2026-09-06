@@ -109,6 +109,7 @@ export default function AdsTab() {
   const [groupLoadError, setGroupLoadError] = useState('');
   const [usesDedicatedWhatsApp, setUsesDedicatedWhatsApp] = useState(false);
   const [sendToAll, setSendToAll] = useState(true);
+  const [postStatus, setPostStatus] = useState(false);
 
   // Carregar último anúncio salvo, agendamento e grupos ao montar
   useEffect(() => {
@@ -289,11 +290,12 @@ export default function AdsTab() {
       const result = await api.disparar(savedAdId, {
         sendToAll,
         groupIds,
+        postStatus,
       });
       if (result.error) {
         toast.error(result.error);
       } else {
-        toast.success(`${result.totalGroups} grupos na fila de envio!`);
+        toast.success(`${result.totalGroups} grupos na fila de envio!${postStatus ? ' Publicando no status...' : ''}`);
         api.getLimiteDiario().then(data => {
           setDailyLimit(data.limit ?? null);
           setDailyUsed(data.used || 0);
@@ -591,6 +593,22 @@ export default function AdsTab() {
             </>
           )}
         </div>
+
+        {/* Publicar no Status do WhatsApp */}
+        <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={postStatus}
+            onChange={(e) => setPostStatus(e.target.checked)}
+            className="mt-1 h-4 w-4 accent-emerald-600"
+          />
+          <span className="text-sm text-gray-700">
+            <span className="font-medium">Publicar também no meu Status do WhatsApp</span>
+            <span className="block text-xs text-gray-500">
+              Posta o mesmo anúncio no seu Status (visível para seus contatos), além do envio aos grupos.
+            </span>
+          </span>
+        </label>
 
         {/* Botões de ação */}
         <div className="flex flex-col gap-3 sm:flex-row">

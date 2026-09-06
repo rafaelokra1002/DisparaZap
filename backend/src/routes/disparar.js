@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const whatsappService = require('../services/whatsappService');
-const { processQueue, hasActiveManualQueue, startManualQueue, finishManualQueue, startSchedule, stopSchedule, getScheduleStatus, activateDailySchedule, deactivateDailySchedule, getDailyScheduleStatus, getDailyLimit } = require('../workers/sendWorker');
+const { processQueue, hasActiveManualQueue, startManualQueue, finishManualQueue, postAdStatus, startSchedule, stopSchedule, getScheduleStatus, activateDailySchedule, deactivateDailySchedule, getDailyScheduleStatus, getDailyLimit } = require('../workers/sendWorker');
 
 function isRrError(e) {
   if (e?.name === 'r' && e?.message === 'r') return true;
@@ -66,7 +66,7 @@ function resolveSelectedGroups(allGroups, sendToAll, groupIds) {
 // Disparar mensagens para grupos
 router.post('/', async (req, res) => {
   try {
-    const { adId, groupIds, sendToAll } = req.body;
+    const { adId, groupIds, sendToAll, postStatus } = req.body;
 
     if (!adId) {
       return res.status(400).json({ error: 'adId é obrigatório' });
@@ -144,9 +144,17 @@ router.post('/', async (req, res) => {
         finishManualQueue(req.userId);
       });
 
+    // Publicar no Status do WhatsApp (opcional), sem bloquear o disparo dos grupos
+    if (postStatus) {
+      postAdStatus(req.userId, ad)
+        .then(() => console.log(`📢 [${req.userId}] Anúncio publicado no status`))
+        .catch(err => console.error('Erro ao publicar no status:', err.message));
+    }
+
     res.json({
-      message: `${groupsToProcess.length} envios iniciados`,
+      message: `${groupsToProcess.length} envios iniciados${postStatus ? ' + status' : ''}`,
       totalGroups: groupsToProcess.length,
+      postStatus: !!postStatus,
       dailyLimit: Number.isFinite(dailyLimit) ? dailyLimit : null,
       remainingAfterQueue: Number.isFinite(dailyLimit)
         ? Math.max(0, remaining - groupsToProcess.length)
