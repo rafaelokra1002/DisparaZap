@@ -14,11 +14,11 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
 
 export const api = {
   // Auth
-  async register(name: string, email: string, password: string) {
+  async register(name: string, email: string, password: string, phone: string) {
     const res = await fetch(`${API_URL}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, phone }),
     });
     return res.json();
   },

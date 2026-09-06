@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import toast, { Toaster } from 'react-hot-toast';
-import { MessageSquare, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { MessageSquare, Mail, Lock, User, Phone, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +25,13 @@ export default function LoginPage() {
           setLoading(false);
           return;
         }
-        result = await api.register(form.name, form.email, form.password);
+        const phoneDigits = form.phone.replace(/\D/g, '');
+        if (phoneDigits.length < 10 || phoneDigits.length > 13) {
+          toast.error('Informe um telefone válido com DDD');
+          setLoading(false);
+          return;
+        }
+        result = await api.register(form.name, form.email, form.password, phoneDigits);
       } else {
         result = await api.login(form.email, form.password);
       }
@@ -81,6 +87,22 @@ export default function LoginPage() {
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-green-400"
                     placeholder="Seu nome"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isRegister && (
+              <div>
+                <label className="block text-sm text-green-200 mb-1">Telefone (com DDD)</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-300" />
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-green-400"
+                    placeholder="11987654321"
                   />
                 </div>
               </div>
