@@ -178,7 +178,7 @@ export default function AdsTab() {
     setSending(true);
     try {
       const groupIds = sendToAll ? undefined : selectedGroups;
-      const result = await api.disparar(savedAdId, groupIds);
+      const result = await api.disparar(savedAdId, groupIds, sendToAll);
       if (result.error) {
         toast.error(result.error);
       } else {

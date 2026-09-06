@@ -74,11 +74,11 @@ export const api = {
   },
 
   // Disparo
-  async disparar(adId: string, groupIds?: string[]) {
+  async disparar(adId: string, groupIds?: string[], sendToAll?: boolean) {
     const res = await fetch(`${API_URL}/api/disparar`, {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ adId, groupIds }),
+      body: JSON.stringify({ adId, groupIds, sendToAll }),
     });
     return res.json();
   },
