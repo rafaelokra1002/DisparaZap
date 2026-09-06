@@ -109,7 +109,11 @@ export default function AdsTab() {
   const [groupLoadError, setGroupLoadError] = useState('');
   const [usesDedicatedWhatsApp, setUsesDedicatedWhatsApp] = useState(false);
   const [sendToAll, setSendToAll] = useState(true);
-  const [postStatus, setPostStatus] = useState(false);
+  const [postStatus, setPostStatus] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('postStatus') === 'true';
+    } catch { return false; }
+  });
 
   // Carregar último anúncio salvo, agendamento e grupos ao montar
   useEffect(() => {
@@ -599,7 +603,10 @@ export default function AdsTab() {
           <input
             type="checkbox"
             checked={postStatus}
-            onChange={(e) => setPostStatus(e.target.checked)}
+            onChange={(e) => {
+              setPostStatus(e.target.checked);
+              try { localStorage.setItem('postStatus', String(e.target.checked)); } catch {}
+            }}
             className="mt-1 h-4 w-4 accent-emerald-600"
           />
           <span className="text-sm text-gray-700">
