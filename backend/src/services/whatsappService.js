@@ -16,6 +16,35 @@ const WA_INITIALIZE_TIMEOUT_MS = Number.parseInt(process.env.WA_INITIALIZE_TIMEO
 const execFileAsync = promisify(execFile);
 const DEFAULT_WINDOWS_CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
+// Remove locks do Chromium (SingletonLock/Cookie/Socket) que sobram de um
+// container anterior. Como o hostname muda a cada redeploy, o Chromium ve o
+// lock como "de outro computador" e se recusa a abrir. Limpar antes de iniciar
+// evita o erro "The profile appears to be in use" / "Can't open display".
+function clearChromiumLocks() {
+  const root = path.resolve('./tokens');
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.name.startsWith('Singleton')) {
+        try {
+          fs.rmSync(full, { force: true });
+        } catch {
+          /* ignora */
+        }
+      }
+    }
+  };
+  walk(root);
+}
+
 const GLOBAL_SESSION_ID = 'admin-global';
 const PUPPETEER_GUARD_FLAG = Symbol('divulgazap-puppeteer-guards');
 
@@ -473,6 +502,8 @@ const whatsappService = {
 
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
+        // Limpa locks orfaos do Chromium antes de cada tentativa de abrir o browser.
+        clearChromiumLocks();
         const executablePath = resolveChromeExecutablePath();
         const client = new Client({
           authStrategy: new LocalAuth({
