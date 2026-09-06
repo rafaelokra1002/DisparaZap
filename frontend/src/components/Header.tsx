@@ -15,22 +15,22 @@ export default function Header({ userName, onLogout }: HeaderProps) {
     <>
       <header className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex flex-col gap-3 py-3 sm:h-16 sm:flex-row sm:items-center sm:justify-between sm:py-0">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <MessageSquare className="w-8 h-8" />
-              <h1 className="text-xl font-bold">DisparaZap</h1>
+              <MessageSquare className="w-7 h-7 sm:w-8 sm:h-8" />
+              <h1 className="text-lg font-bold sm:text-xl">DisparaZap</h1>
             </div>
 
             {/* Ações */}
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-emerald-100">
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap sm:gap-4">
+              <span className="mr-auto min-w-0 truncate text-sm text-emerald-100 sm:mr-0">
                 Olá, <strong>{userName}</strong>
               </span>
 
               <button
                 onClick={() => setShowTutorial(true)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white/20 rounded-lg text-sm hover:bg-white/30 transition"
+                className="flex items-center gap-1 rounded-lg bg-white/20 px-3 py-2 text-xs transition hover:bg-white/30 sm:text-sm"
               >
                 <BookOpen className="w-4 h-4" />
                 Tutorial
@@ -38,7 +38,7 @@ export default function Header({ userName, onLogout }: HeaderProps) {
 
               <button
                 onClick={onLogout}
-                className="flex items-center gap-1 px-3 py-1.5 bg-red-500/80 rounded-lg text-sm hover:bg-red-500 transition"
+                className="flex items-center gap-1 rounded-lg bg-red-500/80 px-3 py-2 text-xs transition hover:bg-red-500 sm:text-sm"
               >
                 <LogOut className="w-4 h-4" />
                 Sair
@@ -51,7 +51,7 @@ export default function Header({ userName, onLogout }: HeaderProps) {
       {/* Modal Tutorial */}
       {showTutorial && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4">📖 Tutorial</h2>
             <div className="space-y-3 text-gray-600 text-sm">
               <div className="flex gap-3">

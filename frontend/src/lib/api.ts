@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -74,21 +74,27 @@ export const api = {
   },
 
   // Disparo
-  async disparar(adId: string, groupIds?: string[], sendToAll?: boolean) {
+  async disparar(adId: string, options?: { sendToAll?: boolean; groupIds?: string[] }) {
+    const sendToAll = options?.sendToAll ?? true;
+    const groupIds = options?.groupIds ?? [];
+
     const res = await fetch(`${API_URL}/api/disparar`, {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ adId, groupIds, sendToAll }),
+      body: JSON.stringify({ adId, sendToAll, groupIds }),
     });
     return res.json();
   },
 
   // Agendamento
-  async agendarDisparo(adId: string, intervalMinutes: number) {
+  async agendarDisparo(adId: string, intervalMinutes: number, options?: { sendToAll?: boolean; groupIds?: string[] }) {
+    const sendToAll = options?.sendToAll ?? true;
+    const groupIds = options?.groupIds ?? [];
+
     const res = await fetch(`${API_URL}/api/disparar/agendar`, {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ adId, intervalMinutes }),
+      body: JSON.stringify({ adId, intervalMinutes, sendToAll, groupIds }),
     });
     return res.json();
   },
@@ -103,6 +109,31 @@ export const api = {
 
   async getAgendamento() {
     const res = await fetch(`${API_URL}/api/disparar/agendamento`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  // Agendamento Diário
+  async ativarDiario(adId: string, startHour: number, intervalMinutes: number, scheduleMode: 'single' | 'triple' = 'single') {
+    const res = await fetch(`${API_URL}/api/disparar/diario/ativar`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ adId, startHour, intervalMinutes, scheduleMode }),
+    });
+    return res.json();
+  },
+
+  async desativarDiario() {
+    const res = await fetch(`${API_URL}/api/disparar/diario/desativar`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  async getStatusDiario() {
+    const res = await fetch(`${API_URL}/api/disparar/diario/status`, {
       headers: authHeaders(),
     });
     return res.json();
@@ -140,6 +171,23 @@ export const api = {
     return res.json();
   },
 
+  // Pagamentos
+  async createPayment(plan: 'days_3' | 'days_7' | 'days_15' | 'days_30') {
+    const res = await fetch(`${API_URL}/api/pagamentos/criar`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ plan }),
+    });
+    return res.json();
+  },
+
+  async checkPayment(transactionId: string) {
+    const res = await fetch(`${API_URL}/api/pagamentos/verificar/${transactionId}`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
   // WhatsApp
   async startWhatsApp() {
     const res = await fetch(`${API_URL}/api/whatsapp/start`, {
@@ -163,6 +211,13 @@ export const api = {
     return res.json();
   },
 
+  async getWhatsAppGroups() {
+    const res = await fetch(`${API_URL}/api/whatsapp/groups`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
   async disconnectWhatsApp() {
     const res = await fetch(`${API_URL}/api/whatsapp/disconnect`, {
       method: 'POST',
@@ -174,6 +229,43 @@ export const api = {
   async logoutWhatsApp() {
     const res = await fetch(`${API_URL}/api/whatsapp/logout`, {
       method: 'POST',
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  // Admin
+  async getAdminStats() {
+    const res = await fetch(`${API_URL}/api/admin/stats`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  async getAdminUsers(page = 1, limit = 20, search = '') {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    if (search) params.set('search', search);
+
+    const res = await fetch(`${API_URL}/api/admin/users?${params.toString()}`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  async setDedicatedWhatsApp(userId: string, enabled: boolean) {
+    const res = await fetch(`${API_URL}/api/admin/users/${userId}/dedicated-whatsapp`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ enabled }),
+    });
+    return res.json();
+  },
+
+  async deleteAdminUser(userId: string) {
+    const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
+      method: 'DELETE',
       headers: authHeaders(),
     });
     return res.json();

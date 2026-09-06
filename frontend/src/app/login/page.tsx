@@ -4,13 +4,31 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import toast, { Toaster } from 'react-hot-toast';
-import { MessageSquare, Mail, Lock, User, Phone, ArrowRight } from 'lucide-react';
+import { MessageSquare, Mail, Lock, User, ArrowRight, Phone } from 'lucide-react';
+
+function formatPhoneInput(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 13);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  if (digits.length <= 7) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  }
+
+  if (digits.length <= 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, digits.length - 4)}-${digits.slice(digits.length - 4)}`;
+  }
+
+  return `+${digits.slice(0, digits.length - 11)} (${digits.slice(-11, -9)}) ${digits.slice(-9, -4)}-${digits.slice(-4)}`;
+}
 
 export default function LoginPage() {
   const router = useRouter();
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,13 +43,12 @@ export default function LoginPage() {
           setLoading(false);
           return;
         }
-        const phoneDigits = form.phone.replace(/\D/g, '');
-        if (phoneDigits.length < 10 || phoneDigits.length > 13) {
-          toast.error('Informe um telefone válido com DDD');
+        if (form.phone.replace(/\D/g, '').length < 10) {
+          toast.error('Informe seu telefone com DDD');
           setLoading(false);
           return;
         }
-        result = await api.register(form.name, form.email, form.password, phoneDigits);
+        result = await api.register(form.name, form.email, form.password, form.phone);
       } else {
         result = await api.login(form.email, form.password);
       }
@@ -46,8 +63,16 @@ export default function LoginPage() {
       localStorage.setItem('disparazap_token', result.token);
       localStorage.setItem('disparazap_user', JSON.stringify(result.user));
 
-      toast.success(isRegister ? 'Conta criada com sucesso!' : 'Login realizado!');
-      router.push('/');
+      if (isRegister && result.user?.isTrialActive) {
+        toast.success('Conta criada. Seu acesso de teste por 24 horas já está liberado.');
+        router.push('/painel');
+      } else if (isRegister && result.user?.requiresPlan) {
+        toast.success('Conta criada. Agora escolha um plano para liberar o sistema.');
+        router.push('/#planos');
+      } else {
+        toast.success(isRegister ? 'Conta criada com sucesso!' : 'Login realizado!');
+        router.push('/painel');
+      }
     } catch (error) {
       toast.error('Erro de conexão com o servidor');
     } finally {
@@ -94,15 +119,16 @@ export default function LoginPage() {
 
             {isRegister && (
               <div>
-                <label className="block text-sm text-green-200 mb-1">Telefone (com DDD)</label>
+                <label className="block text-sm text-green-200 mb-1">Telefone</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-300" />
                   <input
                     type="tel"
                     value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    onChange={(e) => setForm({ ...form, phone: formatPhoneInput(e.target.value) })}
                     className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-green-400"
-                    placeholder="11987654321"
+                    placeholder="(11) 99999-9999"
+                    required={isRegister}
                   />
                 </div>
               </div>

@@ -17,8 +17,7 @@ RUN npm run build
 # ---- runtime ----
 FROM node:20-slim AS runner
 WORKDIR /app
-ENV NODE_ENV=production \
-    PORT=3000
+ENV NODE_ENV=production
 
 # Copia apenas o necessário para rodar `next start`.
 COPY --from=builder /app/package*.json ./
@@ -27,4 +26,5 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/next.config.js ./next.config.js
 
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+# Porta 3000 explicita (o package.json usa -p 3003, mas o compose/dominio espera 3000).
+CMD ["npx", "next", "start", "-p", "3000"]

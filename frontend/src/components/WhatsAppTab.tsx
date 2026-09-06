@@ -14,39 +14,51 @@ import {
   Smartphone,
 } from 'lucide-react';
 
+type WhatsAppStatus = 'connected' | 'connecting' | 'qr_ready' | 'disconnected';
+
+function isRecoverableGroupsState(error?: string) {
+  return error === 'WhatsApp exige nova autenticação por QR Code'
+    || error === 'WhatsApp não está conectado';
+}
+
+function normalizeWhatsAppStatus(rawStatus?: string, qrCode?: string | null): WhatsAppStatus {
+  if (rawStatus === 'connected') {
+    return 'connected';
+  }
+
+  if (qrCode || rawStatus === 'qr_ready') {
+    return 'qr_ready';
+  }
+
+  if (rawStatus === 'connecting') {
+    return 'connecting';
+  }
+
+  return 'disconnected';
+}
+
 export default function WhatsAppTab() {
-  const [status, setStatus] = useState<string>('disconnected');
+  const [status, setStatus] = useState<WhatsAppStatus>('disconnected');
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState(false);
   const [groups, setGroups] = useState<any[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
+  const isPendingConnection = status === 'connecting' || status === 'qr_ready';
 
   useEffect(() => {
     checkStatus();
   }, []);
 
-  // Polling para QR code quando conectando
+  // Continua atualizando status/QR enquanto a sessão estiver conectando.
   useEffect(() => {
     if (!polling) return;
 
-    const interval = setInterval(async () => {
-      try {
-        const data = await api.getQRCode();
-        setStatus(data.status);
-        if (data.qrCode) {
-          setQrCode(data.qrCode);
-        }
-        if (data.status === 'connected') {
-          setPolling(false);
-          setQrCode(null);
-          toast.success('WhatsApp conectado com sucesso!');
-          loadGroups();
-        }
-      } catch (error) {
-        console.error('Erro no polling:', error);
-      }
-    }, 3000);
+    refreshConnection();
+
+    const interval = setInterval(() => {
+      refreshConnection();
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [polling]);
@@ -61,16 +73,87 @@ export default function WhatsAppTab() {
   async function checkStatus() {
     try {
       const data = await api.getWhatsAppStatus();
-      setStatus(data.status);
+      const normalizedStatus = normalizeWhatsAppStatus(data?.status);
+      setStatus(normalizedStatus);
+
+      if (normalizedStatus === 'connected') {
+        setQrCode(null);
+        setPolling(false);
+      }
+
+      if (normalizedStatus === 'connecting' || normalizedStatus === 'qr_ready') {
+        setPolling(true);
+      }
+
+      if (normalizedStatus === 'disconnected') {
+        setPolling(false);
+      }
+
+      return {
+        ...data,
+        status: normalizedStatus,
+      };
     } catch (error) {
       console.error('Erro ao verificar status:', error);
+      return null;
+    }
+  }
+
+  async function refreshConnection(showFeedback = false) {
+    try {
+      const data = await api.getQRCode();
+      const normalizedStatus = normalizeWhatsAppStatus(data?.status, data?.qrCode || null);
+      setStatus(normalizedStatus);
+      setQrCode(data?.qrCode || null);
+
+      if (normalizedStatus === 'connected') {
+        setPolling(false);
+        setQrCode(null);
+        if (showFeedback) {
+          toast.success('WhatsApp conectado com sucesso!');
+        }
+        loadGroups();
+        return;
+      }
+
+      if (normalizedStatus === 'disconnected') {
+        setPolling(false);
+        setQrCode(null);
+        return;
+      }
+
+      if (normalizedStatus === 'connecting' || normalizedStatus === 'qr_ready') {
+        setPolling(true);
+      }
+
+        if (showFeedback && !data?.qrCode) {
+        toast('A sessao ainda esta iniciando. Atualize novamente em alguns segundos.');
+      }
+
+      return {
+        ...data,
+        status: normalizedStatus,
+      };
+    } catch (error) {
+      console.error('Erro ao atualizar conexao:', error);
+      if (showFeedback) {
+        toast.error('Erro ao atualizar o status do WhatsApp');
+      }
+      return null;
     }
   }
 
   async function loadGroups() {
     setLoadingGroups(true);
     try {
-      const data = await api.getGrupos();
+      const data = await api.getWhatsAppGroups();
+
+      if (isRecoverableGroupsState(data?.error)) {
+        setGroups([]);
+        await refreshConnection();
+        return;
+      }
+
       setGroups(data.groups || []);
     } catch (error) {
       console.error('Erro ao carregar grupos:', error);
@@ -82,10 +165,18 @@ export default function WhatsAppTab() {
   async function handleConnect() {
     setLoading(true);
     try {
-      await api.startWhatsApp();
+      setStatus('connecting');
+      setQrCode(null);
       setPolling(true);
+
+      await api.startWhatsApp();
+      await refreshConnection();
+
       toast.success('Iniciando sessão... Aguarde o QR Code.');
     } catch (error) {
+      setStatus('disconnected');
+      setQrCode(null);
+      setPolling(false);
       toast.error('Erro ao iniciar WhatsApp');
       console.error(error);
     } finally {
@@ -134,6 +225,12 @@ export default function WhatsAppTab() {
       text: 'Conectando...',
       desc: 'Escaneie o QR Code com seu WhatsApp',
     },
+    qr_ready: {
+      color: 'bg-blue-100 text-blue-700 border-blue-200',
+      icon: <QrCode className="w-5 h-5 text-blue-600" />,
+      text: 'QR Code pronto',
+      desc: 'Escaneie o QR Code com seu WhatsApp',
+    },
     disconnected: {
       color: 'bg-red-100 text-red-700 border-red-200',
       icon: <XCircle className="w-5 h-5 text-red-600" />,
@@ -142,7 +239,7 @@ export default function WhatsAppTab() {
     },
   };
 
-  const currentStatus = statusConfig[status as keyof typeof statusConfig] || statusConfig.disconnected;
+  const currentStatus = statusConfig[status];
 
   return (
     <div className="space-y-6">
@@ -201,7 +298,7 @@ export default function WhatsAppTab() {
               </>
             )}
 
-            {status === 'connecting' && (
+            {isPendingConnection && (
               <button
                 onClick={handleDisconnect}
                 className="flex-1 flex items-center justify-center gap-2 bg-gray-600 text-white py-3 rounded-xl hover:bg-gray-700 transition font-medium"
@@ -212,7 +309,13 @@ export default function WhatsAppTab() {
             )}
 
             <button
-              onClick={checkStatus}
+              onClick={async () => {
+                const statusData = await checkStatus();
+
+                if (statusData?.status === 'connecting' || statusData?.status === 'qr_ready' || polling) {
+                  await refreshConnection(true);
+                }
+              }}
               className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition"
               title="Atualizar status"
             >
@@ -254,11 +357,11 @@ export default function WhatsAppTab() {
                 <img src={qrCode} alt="QR Code WhatsApp" className="w-64 h-64 mx-auto" />
                 <p className="text-sm text-gray-500 mt-3">Escaneie com seu WhatsApp</p>
               </div>
-            ) : status === 'connecting' ? (
+            ) : isPendingConnection ? (
               <div className="text-center">
                 <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mx-auto mb-3" />
                 <p className="text-gray-500 font-medium">Gerando QR Code...</p>
-                <p className="text-xs text-gray-400 mt-1">Isso pode levar alguns segundos</p>
+                <p className="text-xs text-gray-400 mt-1">Use o botao de atualizar para buscar o QR Code sem recarregamento automatico</p>
               </div>
             ) : (
               <div className="text-center">

@@ -57,8 +57,9 @@ export default function HistoryTab() {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div className="overflow-x-auto">
+              <table className="min-w-[640px] w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
@@ -122,12 +123,13 @@ export default function HistoryTab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
 
           {/* Paginação */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 mt-4">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
