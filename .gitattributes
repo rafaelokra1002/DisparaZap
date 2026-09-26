@@ -1,0 +1,2 @@
+# Patches do patch-package precisam de LF para aplicar no Linux (Docker)
+*.patch text eol=lf
