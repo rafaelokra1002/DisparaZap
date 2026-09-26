@@ -264,6 +264,15 @@ export const api = {
     return res.json();
   },
 
+  async grantAdminUserDays(userId: string, days: number) {
+    const res = await fetch(`${API_URL}/api/admin/users/${userId}/grant-days`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ days }),
+    });
+    return res.json();
+  },
+
   async deleteAdminUser(userId: string) {
     const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
       method: 'DELETE',

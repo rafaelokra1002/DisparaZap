@@ -269,6 +269,7 @@ export default function AdminPage() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [updatingDedicatedUserId, setUpdatingDedicatedUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [grantingUserId, setGrantingUserId] = useState<string | null>(null);
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -384,6 +385,43 @@ export default function AdminPage() {
       toast.error('Erro ao atualizar liberação do WhatsApp individual');
     } finally {
       setUpdatingDedicatedUserId(null);
+    }
+  }
+
+  async function handleGrantDays(user: AdminUser) {
+    if (user.isAdmin) {
+      toast.error('O administrador já tem acesso ilimitado');
+      return;
+    }
+
+    const answer = window.prompt(`Quantos dias grátis liberar para ${user.email}? (1 a 90)`, '3');
+    if (answer === null) {
+      return;
+    }
+
+    const days = Number(answer.trim());
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      toast.error('Informe um número inteiro de dias entre 1 e 90');
+      return;
+    }
+
+    setGrantingUserId(user.id);
+
+    try {
+      const data = await api.grantAdminUserDays(user.id, days);
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      await loadAdminData();
+      toast.success(data?.message || `${days} dia(s) liberado(s) para ${user.email}`);
+    } catch (error) {
+      console.error('Erro ao liberar dias:', error);
+      toast.error('Erro ao liberar dias de acesso');
+    } finally {
+      setGrantingUserId(null);
     }
   }
 
@@ -943,6 +981,13 @@ export default function AdminPage() {
                               : user.dedicatedWhatsApp
                               ? 'Usar global'
                               : 'Liberar individual'}
+                          </button>
+                          <button
+                            onClick={() => handleGrantDays(user)}
+                            disabled={user.isAdmin || grantingUserId === user.id || deletingUserId === user.id}
+                            className="inline-flex items-center justify-center rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {grantingUserId === user.id ? 'Liberando...' : 'Dar dias'}
                           </button>
                           <button
                             onClick={() => handleDeleteUser(user)}

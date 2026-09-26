@@ -209,6 +209,54 @@ router.patch('/users/:userId/dedicated-whatsapp', async (req, res) => {
   }
 });
 
+// Libera dias de acesso gratuito (cortesia). Se o usuario ja tem um plano pago
+// ativo, os dias sao somados ao que resta; senao contam a partir de agora.
+router.patch('/users/:userId/grant-days', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const days = Number(req.body?.days);
+
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      return res.status(400).json({ error: 'Informe um número de dias entre 1 e 90' });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, plan: true, planExpiresAt: true, createdAt: true },
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    if (isAdminEmail(existingUser.email)) {
+      return res.status(400).json({ error: 'O administrador já tem acesso ilimitado' });
+    }
+
+    const now = new Date();
+    const accessState = getUserAccessState(existingUser, now);
+    const base = accessState.hasActivePaidPlan ? new Date(existingUser.planExpiresAt) : now;
+    const planExpiresAt = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        // Mantem o plano pago atual se estiver ativo; senao marca como cortesia.
+        plan: accessState.hasActivePaidPlan ? existingUser.plan : 'cortesia',
+        planExpiresAt,
+      },
+    });
+
+    res.json({
+      message: `${days} dia(s) liberado(s) para ${existingUser.email}`,
+      planExpiresAt,
+    });
+  } catch (error) {
+    console.error('Erro ao liberar dias de acesso:', error);
+    res.status(500).json({ error: 'Erro ao liberar dias de acesso' });
+  }
+});
+
 router.delete('/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
