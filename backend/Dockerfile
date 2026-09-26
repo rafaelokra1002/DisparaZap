@@ -38,6 +38,9 @@ WORKDIR /app
 # Instala TODAS as dependências (o CLI do prisma está em devDependencies e é
 # necessário para `prisma generate` e `prisma migrate deploy`). Cache-friendly.
 COPY package*.json ./
+# Patches do patch-package (aplicados no postinstall). Precisam existir ANTES
+# do npm install, senao a correcao e ignorada silenciosamente.
+COPY patches ./patches
 RUN npm install
 
 # Gera o Prisma Client (precisa do schema).
