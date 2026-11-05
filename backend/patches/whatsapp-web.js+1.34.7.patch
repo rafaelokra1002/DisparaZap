@@ -1,3 +1,21 @@
+diff --git a/node_modules/whatsapp-web.js/src/Client.js b/node_modules/whatsapp-web.js/src/Client.js
+index 800109e..df2dfb3 100644
+--- a/node_modules/whatsapp-web.js/src/Client.js
++++ b/node_modules/whatsapp-web.js/src/Client.js
+@@ -141,6 +141,13 @@ class Client extends EventEmitter {
+         const pairWithPhoneNumber = this.options.pairWithPhoneNumber;
+         const version = await this.getWWebVersion();
+
++        // WhatsApp Web now registers WAWebSocketModel some time after
++        // Debug.VERSION is available; reading it too early returns null and
++        // ExposeAuthStore crashes with "Cannot read properties of null (reading 'Socket')".
++        await this.pupPage.waitForFunction(
++            () => !!window.require?.('WAWebSocketModel')?.Socket,
++            { timeout: this.options.authTimeoutMs || 30000 },
++        );
+         await this.pupPage.evaluate(ExposeAuthStore);
+
+         const needAuthentication = await this.pupPage.evaluate(async () => {
 diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 index 540078a..d34445a 100644
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
