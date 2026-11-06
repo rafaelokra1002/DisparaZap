@@ -1,6 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const whatsappService = require('../services/whatsappService');
+const { getUserAccessState, hasDedicatedWhatsAppAccess } = require('../lib/access');
+const {
+  RANKING_WINDOW_DAYS,
+  DEAD_GROUP_MIN_SENDS,
+  VARIANT_MIN_SENDS,
+  getGroupStats,
+  getHourStats,
+  getVariantReport,
+  getHealth,
+} = require('../lib/insights');
 
 // Obter métricas gerais
 router.get('/', async (req, res) => {
@@ -45,6 +56,12 @@ router.get('/', async (req, res) => {
 
     // Mensagens privadas (estimativa: 2% dos alcançados)
     const privateMessages = Math.floor(peopleReached * 0.02);
+
+    // Contatos reais que chamaram no privado (só existe para quem tem WhatsApp próprio)
+    const [privateTotal, privateToday] = await Promise.all([
+      prisma.privateContact.count({ where: { userId } }),
+      prisma.privateContact.count({ where: { userId, lastMessageAt: { gte: today } } }),
+    ]);
 
     // Cliques por hora (para melhor horário)
     const clicksByHour = await prisma.$queryRaw`
@@ -94,6 +111,7 @@ router.get('/', async (req, res) => {
         totalSends,
         peopleReached,
         privateMessages,
+        privateReal: privateTotal > 0 ? { total: privateTotal, today: privateToday } : null,
         totalGroups,
         lastSend: lastSend ? { groupName: lastSend.groupName, sentAt: lastSend.sentAt } : null,
       },
@@ -114,6 +132,60 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar métricas:', error);
     res.status(500).json({ error: 'Erro ao buscar métricas' });
+  }
+});
+
+// Inteligência: ranking de grupos, melhores horários, teste A/B e saúde do número
+router.get('/inteligencia', async (req, res) => {
+  try {
+    const userId = req.userId;
+    const days = Math.min(90, Math.max(7, parseInt(req.query.days, 10) || RANKING_WINDOW_DAYS));
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, plan: true, planExpiresAt: true, createdAt: true, dedicatedWhatsApp: true, smartGroupsEnabled: true },
+    });
+    const isAdmin = getUserAccessState(user).isAdmin;
+    const sharedNumber = !isAdmin && !hasDedicatedWhatsAppAccess(user);
+
+    let sessionStatus = null;
+    try {
+      sessionStatus = await whatsappService.getStatus(userId);
+    } catch {
+      sessionStatus = null;
+    }
+
+    const latestAd = await prisma.ad.findFirst({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const [groupStats, hourStats, variants, health] = await Promise.all([
+      getGroupStats(userId, days),
+      getHourStats(userId, days),
+      latestAd ? getVariantReport(latestAd) : Promise.resolve([]),
+      getHealth(userId, { sessionStatus, sharedNumber }),
+    ]);
+
+    res.json({
+      days,
+      smartGroupsEnabled: !!user?.smartGroupsEnabled,
+      thresholds: { deadGroupMinSends: DEAD_GROUP_MIN_SENDS, variantMinSends: VARIANT_MIN_SENDS },
+      totals: {
+        trackedSends: groupStats.totalSends,
+        clicks: groupStats.totalClicks,
+        ctr: groupStats.globalCtr,
+        groups: groupStats.groups.length,
+        deadGroups: groupStats.groups.filter((g) => g.dead).length,
+      },
+      groups: groupStats.groups,
+      hours: hourStats,
+      variants,
+      health,
+    });
+  } catch (error) {
+    console.error('Erro ao buscar inteligência:', error);
+    res.status(500).json({ error: 'Erro ao buscar dados de inteligência' });
   }
 });
 

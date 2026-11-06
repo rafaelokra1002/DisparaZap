@@ -477,8 +477,69 @@ function registerProcessGuards() {
   });
 }
 
+// Handler de mensagens recebidas (resposta automática). Registrado de fora
+// para evitar dependência circular com as rotas/serviços que usam o banco.
+let incomingMessageHandler = null;
+
+function serializeWid(wid) {
+  if (!wid) {
+    return null;
+  }
+  if (typeof wid === 'string') {
+    return wid;
+  }
+  if (wid._serialized) {
+    return wid._serialized;
+  }
+  // WhatsApp Web renomeou _serialized para $1 em algumas versões.
+  if (wid.$1) {
+    return wid.$1;
+  }
+  if (wid.user && wid.server) {
+    return `${wid.user}@${wid.server}`;
+  }
+  return null;
+}
+
 const whatsappService = {
   clearSessionCache,
+  serializeWid,
+  GLOBAL_SESSION_ID,
+
+  setIncomingMessageHandler(handler) {
+    incomingMessageHandler = handler;
+  },
+
+  getSessionStatusById(sessionId) {
+    return getSession(sessionId).status;
+  },
+
+  // Envia uma mensagem para um telefone a partir do número do sistema
+  // (sessão global). Não força reconexão: se estiver offline, falha.
+  async sendToPhoneFromGlobal(phoneDigits, text) {
+    const session = getSession(GLOBAL_SESSION_ID);
+    if (!session.client || session.status !== 'connected') {
+      throw new Error('WhatsApp do sistema desconectado');
+    }
+
+    const client = session.client;
+    let chatId = `${phoneDigits}@c.us`;
+    let numberId;
+
+    try {
+      numberId = await client.getNumberId(phoneDigits);
+    } catch (error) {
+      // Se a consulta falhar (mudança interna do WhatsApp), tenta o formato padrão.
+      numberId = undefined;
+    }
+
+    if (numberId === null) {
+      throw new Error('Número sem WhatsApp');
+    }
+    chatId = serializeWid(numberId) || chatId;
+
+    return runWithRetry(`Mensagem direta para ${phoneDigits}`, async () => client.sendMessage(chatId, text));
+  },
 
   async initialize(userId, dedicatedWhatsApp) {
     const sessionId = await resolveSessionId(userId, dedicatedWhatsApp);
@@ -570,6 +631,16 @@ const whatsappService = {
 
         client.on('authenticated', () => {
           console.log(`🔐 [${sessionLabel}] WhatsApp autenticado!`);
+        });
+
+        client.on('message', (msg) => {
+          if (!incomingMessageHandler) {
+            return;
+          }
+          Promise.resolve(incomingMessageHandler({ sessionId, client, msg }))
+            .catch((error) => {
+              console.error(`❌ [${sessionLabel}] Erro ao processar mensagem recebida:`, error.message);
+            });
         });
 
         client.on('error', (error) => {

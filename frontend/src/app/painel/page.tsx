@@ -11,6 +11,8 @@ import AdsTab from '@/components/AdsTab';
 import ClicksTab from '@/components/ClicksTab';
 import HistoryTab from '@/components/HistoryTab';
 import WhatsAppTab from '@/components/WhatsAppTab';
+import InsightsTab from '@/components/InsightsTab';
+import AutomationsTab from '@/components/AutomationsTab';
 import { api } from '@/lib/api';
 
 type PaidPlan = 'days_3' | 'days_7' | 'days_15' | 'days_30';
@@ -211,6 +213,10 @@ export default function PainelPage() {
         return <OverviewTab />;
       case 'ads':
         return <AdsTab />;
+      case 'insights':
+        return <InsightsTab />;
+      case 'automations':
+        return <AutomationsTab />;
       case 'clicks':
         return <ClicksTab />;
       case 'history':

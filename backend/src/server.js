@@ -15,6 +15,9 @@ const uploadRouter = require('./routes/upload');
 const planosRouter = require('./routes/planos');
 const pagamentosRouter = require('./routes/pagamentos');
 const adminRouter = require('./routes/admin');
+const configuracoesRouter = require('./routes/configuracoes');
+const { registerAutoReply } = require('./services/autoReply');
+const { startWeeklyReportScheduler } = require('./services/weeklyReport');
 const { authMiddleware, adminMiddleware, whatsappAccessMiddleware, systemAccessMiddleware } = require('./middleware/auth');
 const { applyPaidPlanTransaction } = require('./lib/planTransactions');
 
@@ -23,8 +26,16 @@ const prisma = new PrismaClient();
 // Inicializar worker de fila
 require('./workers/sendWorker');
 
+// Resposta automática no privado e relatório semanal
+registerAutoReply();
+startWeeklyReportScheduler();
+
 const app = express();
 const PORT = process.env.PORT || 3002;
+
+// Atrás do proxy da Coolify: req.ip passa a ser o IP real de quem clicou
+// (sem isso todos os cliques tinham o IP do proxy).
+app.set('trust proxy', true);
 
 // Middlewares
 app.use(cors({
@@ -94,6 +105,7 @@ app.use('/api/upload', authMiddleware, systemAccessMiddleware, uploadRouter);
 app.use('/api/planos', authMiddleware, planosRouter);
 app.use('/api/pagamentos/', authMiddleware, pagamentosRouter);
 app.use('/api/admin', authMiddleware, adminMiddleware, adminRouter);
+app.use('/api/configuracoes', authMiddleware, systemAccessMiddleware, configuracoesRouter);
 
 // Rota de rastreamento de cliques
 app.use('/r', trackingRouter);

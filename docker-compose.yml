@@ -40,6 +40,8 @@ services:
       BACKEND_URL: https://api.disparazap.online
       # Chromium do sistema (ja instalado na imagem)
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      # --- IA (opcional): gera variações do anúncio. Sem a chave, o botão some. ---
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # --- Pagamentos (opcionais) ---
       MISTIC_PAY_CLIENT_ID: ${MISTIC_PAY_CLIENT_ID:-}
       MISTIC_PAY_CLIENT_SECRET: ${MISTIC_PAY_CLIENT_SECRET:-}

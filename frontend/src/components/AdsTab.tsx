@@ -7,7 +7,9 @@ import Toggle from './Toggle';
 import WhatsAppPreview from './WhatsAppPreview';
 import LoadingSpinner from './LoadingSpinner';
 import { api } from '@/lib/api';
-import { Save, Send, Upload, Image as ImageIcon, Clock, StopCircle, RefreshCw, Users, Calendar, Zap } from 'lucide-react';
+import { Save, Send, Upload, Image as ImageIcon, Clock, StopCircle, RefreshCw, Users, Calendar, Zap, Sparkles, Plus, Trash2, FlaskConical } from 'lucide-react';
+
+const MAX_VARIANTS = 4;
 
 function normalizeUrl(url: string) {
   const trimmed = url.trim();
@@ -77,6 +79,11 @@ export default function AdsTab() {
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [targetUrl, setTargetUrl] = useState('');
 
+  // Variações do anúncio (teste A/B)
+  const [textVariants, setTextVariants] = useState<string[]>([]);
+  const [generatingVariants, setGeneratingVariants] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+
   // Agendamento (por intervalo)
   const [intervalMinutes, setIntervalMinutes] = useState<number>(() => {
     try {
@@ -128,7 +135,12 @@ export default function AdsTab() {
         setImageUrl(ad.imageUrl || '');
         setCaptionActive(ad.captionActive || false);
         setTargetUrl(ad.targetUrl || '');
+        setTextVariants(Array.isArray(ad.textVariants) ? ad.textVariants : []);
       }
+    }).catch(() => {});
+
+    api.getConfiguracoes().then((cfg) => {
+      setAiEnabled(!!cfg?.aiEnabled);
     }).catch(() => {});
 
     api.getAgendamento().then(data => {
@@ -231,6 +243,37 @@ export default function AdsTab() {
   const trackingBaseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
   const trackingLink = trackingId && trackingBaseUrl ? `${trackingBaseUrl}/r/${trackingId}` : '';
   const dailyLimitValue = dailyLimit ?? 150;
+  // A variação substitui o conteúdo que vai ser enviado: legenda (quando sai com imagem) ou texto.
+  const variantBase = captionActive && imageUrl && caption ? caption : text;
+  const variantBaseLabel = captionActive && imageUrl && caption ? 'legenda' : 'texto';
+  const cleanVariants = textVariants.map((v) => v.trim()).filter(Boolean);
+
+  async function handleGenerateVariants() {
+    if (variantBase.trim().length < 10) {
+      toast.error(`Escreva o ${variantBaseLabel} do anúncio antes de gerar variações.`);
+      return;
+    }
+    const slots = MAX_VARIANTS - cleanVariants.length;
+    if (slots <= 0) {
+      toast.error(`Máximo de ${MAX_VARIANTS} variações. Apague uma para gerar outras.`);
+      return;
+    }
+    setGeneratingVariants(true);
+    try {
+      const result = await api.gerarVariacoes(variantBase, Math.min(3, slots));
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      const generated: string[] = result.variations || [];
+      setTextVariants([...cleanVariants, ...generated].slice(0, MAX_VARIANTS));
+      toast.success(`${generated.length} variações criadas! Revise e salve o anúncio.`);
+    } catch {
+      toast.error('Erro ao gerar variações');
+    } finally {
+      setGeneratingVariants(false);
+    }
+  }
   const dailyUsagePercent = Math.min((dailyUsed / dailyLimitValue) * 100, 100);
 
   // Salvar anúncio
@@ -250,6 +293,7 @@ export default function AdsTab() {
           imageUrl,
           captionActive,
           targetUrl,
+          textVariants: cleanVariants,
         });
         setTrackingId(ad.trackingId || trackingId);
         setTargetUrl(ad.targetUrl || '');
@@ -262,6 +306,7 @@ export default function AdsTab() {
           imageUrl,
           captionActive,
           targetUrl,
+          textVariants: cleanVariants,
         });
         setSavedAdId(ad.id);
         setTrackingId(ad.trackingId || null);
@@ -300,6 +345,9 @@ export default function AdsTab() {
         toast.error(result.error);
       } else {
         toast.success(`${result.totalGroups} grupos na fila de envio!${postStatus ? ' Publicando no status...' : ''}`);
+        if (result.skippedGroups > 0) {
+          toast(`🧠 Modo inteligente: ${result.skippedGroups} grupos sem cliques ficaram de fora.`);
+        }
         api.getLimiteDiario().then(data => {
           setDailyLimit(data.limit ?? null);
           setDailyUsed(data.used || 0);
@@ -413,6 +461,64 @@ export default function AdsTab() {
           </div>
         </div>
 
+        {/* VARIAÇÕES - Teste A/B */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <FlaskConical className="w-4 h-4 text-emerald-600" />
+              Variações do anúncio <span className="text-xs font-normal text-gray-400">(teste A/B)</span>
+            </h3>
+            {aiEnabled && (
+              <button
+                onClick={handleGenerateVariants}
+                disabled={generatingVariants}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                <Sparkles className={`w-4 h-4 ${generatingVariants ? 'animate-pulse' : ''}`} />
+                {generatingVariants ? 'Gerando...' : 'Gerar com IA'}
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            Versões diferentes do {variantBaseLabel}. Cada envio usa uma versão; depois de {20} envios de cada, o sistema passa a mandar a que tem mais cliques. Também ajuda contra bloqueio, porque a mensagem não se repete.
+          </p>
+
+          {textVariants.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {textVariants.map((variant, index) => (
+                <div key={index} className="flex gap-2">
+                  <span className="mt-2 w-6 shrink-0 text-xs font-semibold text-gray-400">V{index + 1}</span>
+                  <textarea
+                    value={variant}
+                    onChange={(e) => setTextVariants((prev) => prev.map((v, i) => (i === index ? e.target.value : v)))}
+                    className="w-full h-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                    maxLength={4000}
+                  />
+                  <button
+                    onClick={() => setTextVariants((prev) => prev.filter((_, i) => i !== index))}
+                    className="h-9 shrink-0 rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                    aria-label={`Apagar variação ${index + 1}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {textVariants.length < MAX_VARIANTS && (
+            <button
+              onClick={() => setTextVariants((prev) => [...prev, variantBase])}
+              className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline"
+            >
+              <Plus className="w-4 h-4" /> Adicionar variação manualmente
+            </button>
+          )}
+          {textVariants.length > 0 && (
+            <p className="mt-2 text-xs text-amber-700">Lembre de clicar em &quot;Salvar meus anúncios&quot; para as variações valerem.</p>
+          )}
+        </div>
+
         {/* PASSO 3 - Upload (Opcional) */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="font-semibold text-gray-700 mb-3">
@@ -490,8 +596,10 @@ export default function AdsTab() {
 
             {trackingLink && (
               <div className="mt-4 border-t border-emerald-200 pt-4">
-                <p className="font-semibold text-emerald-800">Link rastreado que será enviado</p>
-                <p className="mt-2 break-all text-gray-700">{trackingLink}</p>
+                <p className="font-semibold text-emerald-800">Link rastreado</p>
+                <p className="mt-2 text-gray-700">
+                  Cada grupo recebe um link exclusivo (ex.: <span className="break-all">{trackingBaseUrl}/r/a8Kf2LmQ9x</span>). Assim a aba Inteligência mostra de qual grupo veio cada clique.
+                </p>
               </div>
             )}
           </div>

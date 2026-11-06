@@ -1,6 +1,15 @@
 const prisma = require('../lib/prisma');
 const whatsappService = require('../services/whatsappService');
 const { getUserAccessState } = require('../lib/access');
+const {
+  generateTrackingCode,
+  getAdBody,
+  pickVariant,
+  prioritizeGroups,
+  hasConsecutiveFailures,
+} = require('../lib/insights');
+
+const CIRCUIT_BREAKER_FAILURES = 5;
 
 // Função de delay
 function delay(ms) {
@@ -162,9 +171,69 @@ async function getSendsToday(userId) {
   return count;
 }
 
+function getBackendUrl() {
+  return process.env.BACKEND_URL || 'http://localhost:3002';
+}
+
+// Envia o anuncio para UM grupo. Cada envio ganha um link rastreado proprio
+// (/r/<codigo>), assim cada clique fica ligado ao grupo e a variacao enviada.
+// Lanca o erro do WhatsApp depois de registrar a falha.
+async function sendAdToGroup(userId, ad, group) {
+  const { kind } = getAdBody(ad);
+  if (!kind) {
+    throw new Error('Anúncio sem conteúdo ativo para envio');
+  }
+
+  const variant = await pickVariant(ad);
+  const trackingCode = ad.trackingId ? generateTrackingCode() : null;
+
+  const log = await prisma.sendLog.create({
+    data: {
+      adId: ad.id,
+      groupId: group.id,
+      groupName: group.name,
+      type: kind,
+      status: 'pending',
+      trackingCode,
+      variantIndex: variant.index,
+    },
+  });
+
+  let content = variarTexto(variant.body);
+  if (trackingCode) {
+    content += `\n\n🔗 ${getBackendUrl()}/r/${trackingCode}`;
+  }
+
+  try {
+    if (kind === 'image') {
+      await whatsappService.sendImage(userId, group.id, ad.imageUrl, content);
+    } else {
+      await whatsappService.sendText(userId, group.id, content);
+    }
+
+    await prisma.sendLog.update({
+      where: { id: log.id },
+      data: { status: 'sent', sentAt: new Date() },
+    });
+  } catch (error) {
+    await prisma.sendLog.update({
+      where: { id: log.id },
+      data: { status: 'failed' },
+    }).catch(() => {});
+    throw error;
+  }
+}
+
+async function shouldTripCircuitBreaker(userId, context) {
+  const tripped = await hasConsecutiveFailures(userId, CIRCUIT_BREAKER_FAILURES).catch(() => false);
+  if (tripped) {
+    console.warn(`🛑 [${userId}] ${context}: ${CIRCUIT_BREAKER_FAILURES} falhas seguidas. Envio pausado para proteger o número.`);
+  }
+  return tripped;
+}
+
 // Processar envio de mensagens em background
 async function processQueue(ad, groups, userId) {
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3002';
   const initialAccess = await ensureUserCanSend(userId, 'Disparo manual');
   if (!initialAccess.hasAccess) {
     return { success: false, blocked: true };
@@ -193,47 +262,13 @@ async function processQueue(ad, groups, userId) {
     console.log(`📤 [${userId}] [${i + 1}/${groupsToSend.length}] Enviando para: ${groupName}`);
 
     try {
-      let type = 'text';
-
-      if (ad.captionActive && ad.imageUrl && ad.caption) {
-        let fullCaption = variarTexto(ad.caption);
-        if (ad.trackingId) {
-          fullCaption += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
-        }
-        await whatsappService.sendImage(userId, groupId, ad.imageUrl, fullCaption);
-        type = 'image';
-      } else if (ad.textActive && ad.text) {
-        let fullText = variarTexto(ad.text);
-        if (ad.trackingId) {
-          fullText += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
-        }
-        await whatsappService.sendText(userId, groupId, fullText);
-        type = 'text';
-      }
-
-      await prisma.sendLog.create({
-        data: {
-          adId: ad.id,
-          groupId,
-          groupName,
-          type,
-          status: 'sent',
-        },
-      });
-
+      await sendAdToGroup(userId, ad, { id: groupId, name: groupName });
       console.log(`✅ Enviado para: ${groupName}`);
     } catch (error) {
       console.error(`❌ Erro ao enviar para ${groupName}:`, error.message);
-
-      await prisma.sendLog.create({
-        data: {
-          adId: ad.id,
-          groupId,
-          groupName,
-          type: ad.textActive ? 'text' : 'image',
-          status: 'failed',
-        },
-      });
+      if (await shouldTripCircuitBreaker(userId, 'Disparo manual')) {
+        break;
+      }
     }
 
     // Delay fixo de 3 minutos entre cada grupo
@@ -271,9 +306,13 @@ async function refillScheduledGroups(entry, userId, reason = 'novo ciclo') {
 
   const allGroups = uniqueGroupsById(await whatsappService.getGroups(userId));
   const selectedIds = new Set((entry.config.groupIds || []).filter(Boolean));
-  const groups = entry.config.sendToAll
+  const selectedGroups = entry.config.sendToAll
     ? allGroups
     : allGroups.filter(group => selectedIds.has(group.id));
+  const { groups, skipped } = await prioritizeGroups(userId, selectedGroups);
+  if (skipped.length > 0) {
+    console.log(`🧠 [${userId}] Modo inteligente: ${skipped.length} grupo(s) sem cliques pulados neste ciclo.`);
+  }
 
   if (groups.length === 0) {
     entry.pendingGroups = [];
@@ -437,34 +476,7 @@ async function sendNextGroup(adId, userId) {
 
     console.log(`⏰ [${userId}] Enviando para: ${group.name} (${sent + 1}/${entry.totalGroups}) no ciclo ${entry.cycle}`);
 
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3002';
-    let type = 'text';
-
-    if (ad.captionActive && ad.imageUrl && ad.caption) {
-      let fullCaption = variarTexto(ad.caption);
-      if (ad.trackingId) {
-        fullCaption += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
-      }
-      await whatsappService.sendImage(userId, group.id, ad.imageUrl, fullCaption);
-      type = 'image';
-    } else if (ad.textActive && ad.text) {
-      let fullText = variarTexto(ad.text);
-      if (ad.trackingId) {
-        fullText += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
-      }
-      await whatsappService.sendText(userId, group.id, fullText);
-      type = 'text';
-    }
-
-    await prisma.sendLog.create({
-      data: {
-        adId: ad.id,
-        groupId: group.id,
-        groupName: group.name,
-        type,
-        status: 'sent',
-      },
-    });
+    await sendAdToGroup(userId, ad, group);
 
     console.log(`✅ [${userId}] Enviado para ${group.name} — restam ${remaining} grupos`);
 
@@ -473,6 +485,9 @@ async function sendNextGroup(adId, userId) {
     }
   } catch (error) {
     console.error(`❌ [${userId}] Erro no envio agendado:`, error.message);
+    if (await shouldTripCircuitBreaker(userId, 'Agendamento automático')) {
+      stopSchedule(userId);
+    }
   } finally {
     const currentEntry = scheduledTimers.get(userId);
     if (currentEntry) {
@@ -609,8 +624,14 @@ async function runDailyDispatch(userId, adId, intervalMinutes, scheduleMode = 's
       return;
     }
 
-    // Buscar todos os grupos
-    const groups = uniqueGroupsById(await whatsappService.getGroups(userId));
+    // Buscar todos os grupos (no modo inteligente: melhores primeiro, sem os grupos mortos)
+    const { groups, skipped } = await prioritizeGroups(
+      userId,
+      uniqueGroupsById(await whatsappService.getGroups(userId)),
+    );
+    if (skipped.length > 0) {
+      console.log(`🧠 [${userId}] Modo inteligente: ${skipped.length} grupo(s) sem cliques pulados hoje.`);
+    }
 
     if (groups.length === 0) {
       console.log(`📅 [${userId}] Nenhum grupo encontrado.`);
@@ -667,9 +688,6 @@ async function runDailyDispatch(userId, adId, intervalMinutes, scheduleMode = 's
       console.log(`📅 [${userId}] [${i + 1}/${groupsToSend.length}] Enviando para: ${group.name}`);
 
       try {
-        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3002';
-        let type = 'text';
-
         // Delay aleatório anti-ban (30s-2min)
         const jitter = Math.floor(Math.random() * 90000) + 30000;
         await delay(jitter);
@@ -679,38 +697,14 @@ async function runDailyDispatch(userId, adId, intervalMinutes, scheduleMode = 's
           return;
         }
 
-        if (ad.captionActive && ad.imageUrl && ad.caption) {
-          let fullCaption = variarTexto(ad.caption);
-          if (ad.trackingId) {
-            fullCaption += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
-          }
-          await whatsappService.sendImage(userId, group.id, ad.imageUrl, fullCaption);
-          type = 'image';
-        } else if (ad.textActive && ad.text) {
-          let fullText = variarTexto(ad.text);
-          if (ad.trackingId) {
-            fullText += `\n\n🔗 ${backendUrl}/r/${ad.trackingId}`;
-          }
-          await whatsappService.sendText(userId, group.id, fullText);
-          type = 'text';
-        }
-
-        await prisma.sendLog.create({
-          data: {
-            adId: ad.id,
-            groupId: group.id,
-            groupName: group.name,
-            type,
-            status: 'sent',
-          },
-        });
+        await sendAdToGroup(userId, ad, group);
 
         console.log(`✅ [${userId}] Enviado para ${group.name} — restam ${groupsToSend.length - i - 1}`);
       } catch (error) {
         console.error(`❌ [${userId}] Erro ao enviar para ${group.name}:`, error.message);
-        await prisma.sendLog.create({
-          data: { adId: ad.id, groupId: group.id, groupName: group.name, type: 'text', status: 'failed' },
-        });
+        if (await shouldTripCircuitBreaker(userId, 'Disparo diário')) {
+          return;
+        }
       }
 
       // Esperar o intervalo configurado entre envios do disparo diário.

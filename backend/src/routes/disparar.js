@@ -3,6 +3,7 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 const whatsappService = require('../services/whatsappService');
 const { processQueue, hasActiveManualQueue, startManualQueue, finishManualQueue, postAdStatus, startSchedule, stopSchedule, getScheduleStatus, activateDailySchedule, deactivateDailySchedule, getDailyScheduleStatus, getDailyLimit } = require('../workers/sendWorker');
+const { prioritizeGroups } = require('../lib/insights');
 
 function isRrError(e) {
   if (e?.name === 'r' && e?.message === 'r') return true;
@@ -72,8 +73,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'adId é obrigatório' });
     }
 
-    // Buscar anúncio
-    const ad = await prisma.ad.findUnique({ where: { id: adId } });
+    // Buscar anúncio (somente do próprio usuário)
+    const ad = await prisma.ad.findFirst({ where: { id: adId, userId: req.userId } });
     if (!ad) {
       return res.status(404).json({ error: 'Anúncio não encontrado' });
     }
@@ -92,7 +93,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: resolvedGroups.error });
     }
 
-    const groups = resolvedGroups;
+    // Modo inteligente: melhores grupos primeiro (entram antes do corte do
+    // limite diário) e grupos sem nenhum clique ficam de fora.
+    const { groups, skipped } = await prioritizeGroups(req.userId, resolvedGroups);
 
     if (groups.length === 0) {
       return res.status(400).json({ error: 'Nenhum grupo encontrado' });
@@ -154,6 +157,7 @@ router.post('/', async (req, res) => {
     res.json({
       message: `${groupsToProcess.length} envios iniciados${postStatus ? ' + status' : ''}`,
       totalGroups: groupsToProcess.length,
+      skippedGroups: skipped.length,
       postStatus: !!postStatus,
       dailyLimit: Number.isFinite(dailyLimit) ? dailyLimit : null,
       remainingAfterQueue: Number.isFinite(dailyLimit)
@@ -186,7 +190,7 @@ router.post('/agendar', async (req, res) => {
       return res.status(400).json({ error: 'Intervalo mínimo é 3 minutos' });
     }
 
-    const ad = await prisma.ad.findUnique({ where: { id: adId } });
+    const ad = await prisma.ad.findFirst({ where: { id: adId, userId: req.userId } });
     if (!ad) {
       return res.status(404).json({ error: 'Anúncio não encontrado' });
     }
@@ -288,7 +292,7 @@ router.post('/diario/ativar', async (req, res) => {
       return res.status(400).json({ error: 'Intervalo mínimo é 3 minutos' });
     }
 
-    const ad = await prisma.ad.findUnique({ where: { id: adId } });
+    const ad = await prisma.ad.findFirst({ where: { id: adId, userId: req.userId } });
     if (!ad) {
       return res.status(404).json({ error: 'Anúncio não encontrado' });
     }

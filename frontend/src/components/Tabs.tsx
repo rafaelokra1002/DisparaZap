@@ -9,8 +9,10 @@ interface TabsProps {
 const baseTabs = [
   { id: 'overview', label: 'Visão Geral', icon: '📊' },
   { id: 'ads', label: 'Meus Anúncios', icon: '📝' },
+  { id: 'insights', label: 'Inteligência', icon: '🧠' },
   { id: 'clicks', label: 'Cliques', icon: '🖱️' },
   { id: 'history', label: 'Histórico', icon: '📋' },
+  { id: 'automations', label: 'Automações', icon: '⚙️' },
 ];
 
 export default function Tabs({ activeTab, onTabChange, showWhatsApp = false }: TabsProps) {

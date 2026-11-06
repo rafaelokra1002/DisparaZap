@@ -21,6 +21,16 @@ model User {
   ads       Ad[]
   dailySchedules DailySchedule[]
   planTransactions PlanTransaction[]
+
+  // Inteligencia de grupos: prioriza grupos/horarios que geram cliques
+  smartGroupsEnabled  Boolean   @default(false)
+  // Resposta automatica no privado (somente quem tem WhatsApp proprio)
+  autoReplyEnabled    Boolean   @default(false)
+  autoReplyMessage    String?
+  // Relatorio semanal enviado no WhatsApp do cliente
+  weeklyReportEnabled Boolean   @default(true)
+  lastWeeklyReportAt  DateTime?
+  privateContacts     PrivateContact[]
 }
 
 model PlanTransaction {
@@ -54,6 +64,10 @@ model Ad {
   // Link de rastreamento gerado
   trackingId String?  @unique
   targetUrl  String?
+
+  // Variacoes do texto/legenda para teste A/B (array de strings).
+  // A variacao 0 e sempre o proprio texto/legenda do anuncio.
+  textVariants Json?
   
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -72,8 +86,16 @@ model SendLog {
   groupId   String
   type      String   // "text" ou "image"
   status    String   @default("pending") // "pending", "sent", "failed"
-  
+
+  // Link rastreado exclusivo deste envio (/r/<trackingCode>), para saber
+  // de qual grupo e de qual variacao veio cada clique.
+  trackingCode String? @unique
+  variantIndex Int?
+
   sentAt    DateTime @default(now())
+  clicks    Click[]
+
+  @@index([groupId])
 }
 
 model Click {
@@ -86,8 +108,15 @@ model Click {
   country   String?
   device    String?
   referer   String?
-  
+
+  sendLogId    String?
+  sendLog      SendLog? @relation(fields: [sendLogId], references: [id], onDelete: SetNull)
+  groupId      String?
+  variantIndex Int?
+
   clickedAt DateTime @default(now())
+
+  @@index([groupId])
 }
 
 model DailySchedule {
@@ -106,3 +135,18 @@ model DailySchedule {
   updatedAt      DateTime @updatedAt
 }
 
+
+// Contatos que chamaram no privado (para resposta automatica e metricas reais)
+model PrivateContact {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactId     String
+  name          String?
+  messageCount  Int      @default(0)
+  firstAt       DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+  lastReplyAt   DateTime?
+
+  @@unique([userId, contactId])
+}

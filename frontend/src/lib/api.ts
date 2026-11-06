@@ -172,6 +172,56 @@ export const api = {
     return res.json();
   },
 
+  // Inteligência (ranking de grupos, horários, teste A/B, saúde do número)
+  async getInteligencia(days = 30) {
+    const res = await fetch(`${API_URL}/api/metricas/inteligencia?days=${days}`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  // IA: variações do anúncio
+  async gerarVariacoes(text: string, count = 3) {
+    const res = await fetch(`${API_URL}/api/ads/ia/variacoes`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ text, count }),
+    });
+    return res.json();
+  },
+
+  // Configurações (modo inteligente, resposta automática, relatório semanal)
+  async getConfiguracoes() {
+    const res = await fetch(`${API_URL}/api/configuracoes`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  async saveConfiguracoes(data: Record<string, unknown>) {
+    const res = await fetch(`${API_URL}/api/configuracoes`, {
+      method: 'PUT',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+
+  async getPreviaRelatorio() {
+    const res = await fetch(`${API_URL}/api/configuracoes/relatorio/previa`, {
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
+  async testarRelatorio() {
+    const res = await fetch(`${API_URL}/api/configuracoes/relatorio/teste`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
   // Pagamentos
   async createPayment(plan: 'days_3' | 'days_7' | 'days_15' | 'days_30') {
     const res = await fetch(`${API_URL}/api/pagamentos/criar`, {

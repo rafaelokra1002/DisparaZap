@@ -11,6 +11,7 @@ interface Metrics {
     totalSends: number;
     peopleReached: number;
     privateMessages: number;
+    privateReal?: { total: number; today: number } | null;
     totalGroups: number;
     lastSend: { groupName: string; sentAt: string } | null;
   };
@@ -79,8 +80,19 @@ export default function OverviewTab() {
         {/* Mensagens privadas */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <MessageSquare className="w-5 h-5 text-gray-500 mb-3" />
-          <p className="text-3xl font-bold text-gray-800">{overview.privateMessages.toLocaleString()}</p>
-          <p className="text-sm text-gray-500 mt-1">Mensagens no WhatsApp privado hoje</p>
+          {overview.privateReal ? (
+            <>
+              <p className="text-3xl font-bold text-gray-800">{overview.privateReal.today.toLocaleString()}</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Pessoas que chamaram no privado hoje · {overview.privateReal.total.toLocaleString()} no total
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-3xl font-bold text-gray-800">{overview.privateMessages.toLocaleString()}</p>
+              <p className="text-sm text-gray-500 mt-1">Mensagens no WhatsApp privado (estimativa)</p>
+            </>
+          )}
         </div>
       </div>
 
