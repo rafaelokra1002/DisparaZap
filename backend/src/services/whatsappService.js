@@ -510,6 +510,11 @@ const whatsappService = {
             clientId: sessionId,
             dataPath: './tokens',
           }),
+          // Sempre carrega a versao atual do WhatsApp Web. Com o cache 'local'
+          // padrao, a lib servia um index.html antigo salvo em .wwebjs_cache
+          // (versao fixa 2.3000.1017054665) que o WhatsApp ja nao suporta: a
+          // pagina carregava pela metade e o QR Code nunca aparecia.
+          webVersionCache: { type: 'none' },
           puppeteer: {
             headless: true,
             protocolTimeout: WA_PROTOCOL_TIMEOUT_MS,
