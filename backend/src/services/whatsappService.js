@@ -188,6 +188,8 @@ function isRetryableWhatsAppError(error) {
   if (isRrError(error)) return false;
   return message.includes('timed out') ||
     message.includes('initialization timed out') ||
+    // Timeout do puppeteer esperando o WhatsApp Web carregar (perfil travado).
+    message.includes('waiting failed') ||
     message.includes('protocolerror') ||
     message.includes('execution context was destroyed') ||
     message.includes('target closed') ||
