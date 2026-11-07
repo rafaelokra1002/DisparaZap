@@ -196,6 +196,16 @@ router.patch('/users/:userId/dedicated-whatsapp', async (req, res) => {
       },
     });
 
+    // Ao mandar para o número global, fecha a sessão individual que estava
+    // aberta (ex.: esperando QR Code). O login salvo é mantido, caso volte.
+    if (!enabled) {
+      try {
+        await whatsappService.disconnect(userId, true);
+      } catch (error) {
+        console.warn(`Não foi possível fechar a sessão individual de ${userId}: ${error.message}`);
+      }
+    }
+
     whatsappService.clearSessionCache(userId);
 
     res.json({

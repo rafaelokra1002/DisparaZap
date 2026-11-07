@@ -11,11 +11,10 @@ function hasDedicatedWhatsAppAccess(user) {
     return false;
   }
 
-  if (user.dedicatedWhatsApp) {
-    return true;
-  }
-
-  return getUserAccessState(user).isTrialActive;
+  // Toda conta nasce com dedicatedWhatsApp = true (cadastro). Ele só fica
+  // false quando o admin escolhe "Usar global", e essa escolha precisa valer
+  // inclusive durante o teste de 24h.
+  return !!user.dedicatedWhatsApp;
 }
 
 function getUserAccessState(user, now = new Date()) {
