@@ -323,6 +323,14 @@ export const api = {
     return res.json();
   },
 
+  async impersonateUser(userId: string) {
+    const res = await fetch(`${API_URL}/api/admin/users/${userId}/impersonate`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+
   async deleteAdminUser(userId: string) {
     const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
       method: 'DELETE',

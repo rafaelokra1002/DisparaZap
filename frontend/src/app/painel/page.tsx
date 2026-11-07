@@ -134,7 +134,35 @@ export default function PainelPage() {
     return () => window.clearInterval(interval);
   }, [transactionId, paymentData, checkingPayment]);
 
+  // Admin vendo o painel como um cliente ("Entrar como" no admin).
+  const [impersonating, setImpersonating] = useState(false);
+  useEffect(() => {
+    setImpersonating(!!localStorage.getItem('disparazap_admin_token'));
+  }, []);
+
+  const stopImpersonating = () => {
+    const adminToken = localStorage.getItem('disparazap_admin_token');
+    const adminUser = localStorage.getItem('disparazap_admin_user');
+    localStorage.removeItem('disparazap_admin_token');
+    localStorage.removeItem('disparazap_admin_user');
+    if (!adminToken) {
+      router.push('/login');
+      return;
+    }
+    localStorage.setItem('disparazap_token', adminToken);
+    if (adminUser) {
+      localStorage.setItem('disparazap_user', adminUser);
+    } else {
+      localStorage.removeItem('disparazap_user');
+    }
+    router.push('/admin');
+  };
+
   const handleLogout = () => {
+    if (localStorage.getItem('disparazap_admin_token')) {
+      stopImpersonating();
+      return;
+    }
     localStorage.removeItem('disparazap_token');
     localStorage.removeItem('disparazap_user');
     router.push('/login');
@@ -232,6 +260,17 @@ export default function PainelPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {impersonating && (
+        <div className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-sky-700 px-4 py-2 text-sm text-white">
+          <span>👁️ Você está vendo o painel como <strong>{userName}</strong>. O que fizer aqui vale para a conta dele.</span>
+          <button
+            onClick={stopImpersonating}
+            className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-50"
+          >
+            Voltar ao admin
+          </button>
+        </div>
+      )}
       <Header userName={userName} onLogout={handleLogout} />
       {!requiresPaidPlan && <Tabs activeTab={activeTab} onTabChange={setActiveTab} showWhatsApp={canManageWhatsApp} />}
 

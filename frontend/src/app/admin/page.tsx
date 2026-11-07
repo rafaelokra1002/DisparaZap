@@ -19,6 +19,7 @@ import {
   CreditCard,
   Trash2,
   Phone,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -270,6 +271,7 @@ export default function AdminPage() {
   const [updatingDedicatedUserId, setUpdatingDedicatedUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [grantingUserId, setGrantingUserId] = useState<string | null>(null);
+  const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -385,6 +387,34 @@ export default function AdminPage() {
       toast.error('Erro ao atualizar liberação do WhatsApp individual');
     } finally {
       setUpdatingDedicatedUserId(null);
+    }
+  }
+
+  // Abre o painel do cliente como se fosse ele. O acesso do admin fica guardado
+  // para o botão "Voltar ao admin" da faixa no topo do painel.
+  async function handleImpersonate(user: AdminUser) {
+    setImpersonatingUserId(user.id);
+    try {
+      const data = await api.impersonateUser(user.id);
+      if (data?.error || !data?.token) {
+        toast.error(data?.error || 'Não foi possível entrar como esse usuário');
+        return;
+      }
+
+      const adminToken = localStorage.getItem('disparazap_token');
+      const adminUser = localStorage.getItem('disparazap_user');
+      if (adminToken) {
+        localStorage.setItem('disparazap_admin_token', adminToken);
+        localStorage.setItem('disparazap_admin_user', adminUser || '');
+      }
+      localStorage.setItem('disparazap_token', data.token);
+      localStorage.setItem('disparazap_user', JSON.stringify(data.user));
+      router.push('/painel');
+    } catch (error) {
+      console.error('Erro ao entrar como usuário:', error);
+      toast.error('Erro ao entrar como usuário');
+    } finally {
+      setImpersonatingUserId(null);
     }
   }
 
@@ -965,6 +995,15 @@ export default function AdminPage() {
                       </td>
                       <td className="py-3 pr-0 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleImpersonate(user)}
+                            disabled={user.isAdmin || impersonatingUserId === user.id || deletingUserId === user.id}
+                            title="Abrir o painel exatamente como esse cliente vê"
+                            className="inline-flex items-center justify-center gap-1 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            {impersonatingUserId === user.id ? 'Entrando...' : 'Entrar como'}
+                          </button>
                           <button
                             onClick={() => handleDedicatedWhatsAppToggle(user)}
                             disabled={user.isAdmin || updatingDedicatedUserId === user.id || deletingUserId === user.id}

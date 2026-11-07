@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const whatsappService = require('../services/whatsappService');
-const { isAdminEmail } = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
+const { isAdminEmail, JWT_SECRET } = require('../middleware/auth');
 const { getUserAccessState, hasDedicatedWhatsAppAccess } = require('../lib/access');
 
 // Estatísticas gerais do sistema
@@ -254,6 +255,34 @@ router.patch('/users/:userId/grant-days', async (req, res) => {
   } catch (error) {
     console.error('Erro ao liberar dias de acesso:', error);
     res.status(500).json({ error: 'Erro ao liberar dias de acesso' });
+  }
+});
+
+// Gera um acesso temporário para o admin ver o painel exatamente como o
+// cliente vê (suporte). O token guarda qual admin entrou e expira em 2h.
+router.post('/users/:userId/impersonate', async (req, res) => {
+  try {
+    const { buildUserAccessPayload } = require('./auth');
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.userId },
+      select: { id: true, name: true, email: true, phone: true, dedicatedWhatsApp: true, createdAt: true, plan: true, planExpiresAt: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    if (isAdminEmail(user.email)) {
+      return res.status(400).json({ error: 'Não é possível entrar como outro administrador' });
+    }
+
+    const token = jwt.sign({ userId: user.id, impersonatedBy: req.user.id }, JWT_SECRET, { expiresIn: '2h' });
+    console.log(`👤 Admin ${req.user.email} entrou como ${user.email}`);
+
+    res.json({ token, user: buildUserAccessPayload(user) });
+  } catch (error) {
+    console.error('Erro ao entrar como usuário:', error);
+    res.status(500).json({ error: 'Erro ao entrar como usuário' });
   }
 });
 
