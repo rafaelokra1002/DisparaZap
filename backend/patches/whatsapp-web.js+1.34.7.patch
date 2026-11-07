@@ -1,21 +1,45 @@
 diff --git a/node_modules/whatsapp-web.js/src/Client.js b/node_modules/whatsapp-web.js/src/Client.js
-index 800109e..df2dfb3 100644
+index 800109e..bc47d96 100644
 --- a/node_modules/whatsapp-web.js/src/Client.js
 +++ b/node_modules/whatsapp-web.js/src/Client.js
 @@ -141,6 +141,13 @@ class Client extends EventEmitter {
          const pairWithPhoneNumber = this.options.pairWithPhoneNumber;
          const version = await this.getWWebVersion();
-
+ 
 +        // WhatsApp Web now registers WAWebSocketModel some time after
 +        // Debug.VERSION is available; reading it too early returns null and
 +        // ExposeAuthStore crashes with "Cannot read properties of null (reading 'Socket')".
 +        await this.pupPage.waitForFunction(
 +            () => !!window.require?.('WAWebSocketModel')?.Socket,
-+            { timeout: this.options.authTimeoutMs || 30000 },
++            { timeout: this.options.authTimeoutMs || 30000, polling: 200 },
 +        );
          await this.pupPage.evaluate(ExposeAuthStore);
-
+ 
          const needAuthentication = await this.pupPage.evaluate(async () => {
+@@ -258,7 +265,23 @@ class Client extends EventEmitter {
+                         );
+                     const platform =
+                         window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
++                    // O WhatsApp Web passou a codificar o QR como link
++                    // (https://wa.me/settings/linked_devices#...) quando o
++                    // experimento "native camera" está ativo; o celular recusa
++                    // o formato antigo nesse caso. Segue o que a própria página usa.
++                    const getQRPrefix = () => {
++                        try {
++                            return window
++                                .require('WAWebNativeCameraQRLinkedDeviceUtils')
++                                .isNativeCameraQRLinkedDeviceTest()
++                                ? 'https://wa.me/settings/linked_devices#'
++                                : '';
++                        } catch (e) {
++                            return '';
++                        }
++                    };
+                     const getQR = (ref) =>
++                        getQRPrefix() +
+                         ref +
+                         ',' +
+                         staticKeyB64 +
 diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 index 540078a..d34445a 100644
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
