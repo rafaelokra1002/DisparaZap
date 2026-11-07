@@ -238,7 +238,7 @@ export default function PainelPage() {
   function renderTab() {
     switch (activeTab) {
       case 'overview':
-        return <OverviewTab />;
+        return <OverviewTab canManageWhatsApp={canManageWhatsApp} onNavigate={setActiveTab} />;
       case 'ads':
         return <AdsTab />;
       case 'insights':

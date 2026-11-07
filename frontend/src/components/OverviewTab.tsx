@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import LoadingSpinner from './LoadingSpinner';
+import GettingStarted from './GettingStarted';
 import { api } from '@/lib/api';
 import { Megaphone, BarChart3, Users, MessageSquare } from 'lucide-react';
 
@@ -15,9 +16,15 @@ interface Metrics {
     totalGroups: number;
     lastSend: { groupName: string; sentAt: string } | null;
   };
+  clicks?: { totalClicks: number };
 }
 
-export default function OverviewTab() {
+interface OverviewTabProps {
+  canManageWhatsApp?: boolean;
+  onNavigate?: (tab: string) => void;
+}
+
+export default function OverviewTab({ canManageWhatsApp = false, onNavigate }: OverviewTabProps = {}) {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,6 +55,15 @@ export default function OverviewTab() {
   };
 
   return (
+    <>
+    {onNavigate && (
+      <GettingStarted
+        totalSends={overview.totalSends}
+        totalClicks={metrics?.clicks?.totalClicks || 0}
+        canManageWhatsApp={canManageWhatsApp}
+        onNavigate={onNavigate}
+      />
+    )}
     <div className="bg-gray-50 rounded-2xl p-6">
       <h2 className="text-lg font-bold text-gray-800">Como está indo</h2>
       <p className="text-sm text-gray-500 mb-5">
@@ -113,5 +129,6 @@ export default function OverviewTab() {
         </p>
       </div>
     </div>
+    </>
   );
 }
