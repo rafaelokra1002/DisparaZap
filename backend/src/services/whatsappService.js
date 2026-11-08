@@ -894,9 +894,9 @@ const whatsappService = {
     const doPost = async () => {
       if (imageUrl) {
         const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
-        return client.sendMessage(STATUS_JID, media, { caption: caption || '' });
+        return client.sendMessage(STATUS_JID, media, { caption: caption || '', sendSeen: false });
       }
-      return client.sendMessage(STATUS_JID, text || '');
+      return client.sendMessage(STATUS_JID, text || '', { sendSeen: false });
     };
 
     try {

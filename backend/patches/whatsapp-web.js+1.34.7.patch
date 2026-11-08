@@ -41,7 +41,7 @@ index 800109e..bc47d96 100644
                          ',' +
                          staticKeyB64 +
 diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-index 540078a..d34445a 100644
+index 540078a..7d7266d 100644
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 +++ b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 @@ -483,6 +483,12 @@ exports.LoadUtils = () => {
@@ -57,3 +57,119 @@ index 540078a..d34445a 100644
          // Bot's won't reply if canonicalUrl is set (linking)
          if (botOptions) {
              delete message.canonicalUrl;
+@@ -535,42 +541,84 @@ exports.LoadUtils = () => {
+         }
+ 
+         if (isStatus) {
++            // O WhatsApp Web mudou o envio de status (contas LID):
++            // - WAWebStatusGatingUtils.canCheckStatusRankingPosterGating foi
++            //   removido, então montar o Msg com cannotBeRanked quebrava até
++            //   o status de texto;
++            // - sendStatusMediaMsgAction agora recebe um objeto
++            //   { mediaMsgData, beforeSend, funnelContext } com WIDs LID.
++            // Ver wwebjs/whatsapp-web.js#201807.
+             const { backgroundColor, fontStyle } = extraOptions;
+             const isMedia = Object.keys(mediaOptions).length > 0;
+-            const mediaUpdate = (data) =>
+-                window.require('WAWebMediaUpdateMsg')(data, mediaOptions);
+-            const msg = new (window.require('WAWebCollections').Msg.modelClass)(
+-                {
+-                    ...message,
+-                    author: participant ? participant : null,
+-                    messageSecret: window.crypto.getRandomValues(
+-                        new Uint8Array(32),
+-                    ),
+-                    cannotBeRanked: window
+-                        .require('WAWebStatusGatingUtils')
+-                        .canCheckStatusRankingPosterGating(),
+-                },
+-            );
++            const StatusAction = window.require('WAWebSendStatusMsgAction');
++
++            if (!isMedia) {
++                const statusOptions = {
++                    color:
++                        (backgroundColor &&
++                            window.WWebJS.assertColor(backgroundColor)) ||
++                        0xff7acca5,
++                    font: (fontStyle >= 0 && fontStyle <= 7 && fontStyle) || 0,
++                    text: message.body,
++                };
++                const textResult =
++                    await StatusAction.sendStatusTextMsgAction(statusOptions);
++                if (
++                    textResult &&
++                    textResult.messageSendResult &&
++                    textResult.messageSendResult !== 'OK'
++                ) {
++                    throw new Error(
++                        'Falha ao publicar status: ' +
++                            textResult.messageSendResult,
++                    );
++                }
++                return null;
++            }
+ 
+-            // for text only
+-            const statusOptions = {
+-                color:
+-                    (backgroundColor &&
+-                        window.WWebJS.assertColor(backgroundColor)) ||
+-                    0xff7acca5,
+-                font: (fontStyle >= 0 && fontStyle <= 7 && fontStyle) || 0,
+-                text: msg.body,
++            const MeUser = window.require('WAWebUserPrefsMeUser');
++            const StatusMsgKey = window.require('WAWebMsgKey');
++            const statusFrom = MeUser.getMeDeviceLidOrThrow();
++            const statusAuthor = MeUser.getMaybeMeLidUser() || participant;
++            const statusKey = new StatusMsgKey({
++                fromMe: true,
++                remote: chat.id,
++                id: newId,
++                participant: statusAuthor,
++            });
++            const mediaMsgData = {
++                id: statusKey,
++                ack: 0,
++                from: statusFrom,
++                to: chat.id,
++                author: statusAuthor,
++                local: true,
++                self: 'out',
++                t: parseInt(new Date().getTime() / 1000),
++                isNewMsg: true,
++                type: 'chat',
++                body: mediaOptions.preview,
++                ...mediaOptions,
+             };
++            if (mediaMsgData.__x_id) {
++                delete mediaMsgData.__x_id;
++            }
+ 
+-            await window
+-                .require('WAWebSendStatusMsgAction')
+-                [
+-                    isMedia
+-                        ? 'sendStatusMediaMsgAction'
+-                        : 'sendStatusTextMsgAction'
+-                ](...(isMedia ? [msg, mediaUpdate] : [statusOptions]));
+-
+-            return msg;
++            const result = await StatusAction.sendStatusMediaMsgAction({
++                mediaMsgData,
++                beforeSend: async () => {},
++                funnelContext: undefined,
++            });
++            if (
++                result &&
++                result.messageSendResult &&
++                result.messageSendResult !== 'OK'
++            ) {
++                throw new Error(
++                    'Falha ao publicar status: ' + result.messageSendResult,
++                );
++            }
++            return null;
+         }
+ 
+         const [msgPromise, sendMsgResultPromise] = window
