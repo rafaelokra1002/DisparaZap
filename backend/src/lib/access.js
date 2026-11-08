@@ -11,6 +11,11 @@ function hasDedicatedWhatsAppAccess(user) {
     return false;
   }
 
+  // O admin sempre usa o número do sistema (sessão global).
+  if (isAdminEmail(user.email)) {
+    return false;
+  }
+
   // Toda conta nasce com dedicatedWhatsApp = true (cadastro). Ele só fica
   // false quando o admin escolhe "Usar global", e essa escolha precisa valer
   // inclusive durante o teste de 24h.

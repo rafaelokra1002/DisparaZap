@@ -98,7 +98,7 @@ async function resolveSessionId(userId, dedicatedWhatsApp) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { dedicatedWhatsApp: true, plan: true, planExpiresAt: true, createdAt: true },
+    select: { email: true, dedicatedWhatsApp: true, plan: true, planExpiresAt: true, createdAt: true },
   });
 
   const sessionId = hasDedicatedWhatsAppAccess(user) ? `dedicated-${userId}` : GLOBAL_SESSION_ID;
